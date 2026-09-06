@@ -1,6 +1,11 @@
 import Dexie, { type Table } from "dexie";
 
-export type LedgerType = "expense" | "income" | "setAside" | "rewardSpend";
+export type LedgerType =
+  | "expense"
+  | "income"
+  | "setAside"
+  | "rewardEarned"
+  | "rewardSpend";
 export type LedgerSource = "manual" | "plaid" | "import";
 
 export interface Category {
@@ -25,6 +30,8 @@ export interface LedgerEntry {
   source: LedgerSource;
   /** Dedupe key for bank-synced transactions. */
   plaidTransactionId?: string;
+  /** For rewardEarned rows: ledger id of the setAside that produced them. */
+  rewardOf?: number;
   createdAt: number;
 }
 
@@ -99,6 +106,10 @@ class BetterExpenseDB extends Dexie {
       streaks: "key, lastDate",
       badges: "code",
       plaidItems: "++id",
+    });
+    // v2: index rewardOf so cascade deletes can find minted reward rows.
+    this.version(2).stores({
+      ledger: "++id, date, type, goalId, plaidTransactionId, rewardOf",
     });
   }
 }

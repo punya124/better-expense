@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useLiveQuery } from "dexie-react-hooks";
 import { useMemo, useState } from "react";
 import { db, type Category, type LedgerEntry, type LedgerType } from "@/lib/db";
-import { deleteEntry } from "@/lib/ledger";
+import { deleteEntryCascade } from "@/lib/gamification";
 import { dayLabel, fmtMoney } from "@/lib/format";
 import { cx } from "@/components/ui";
 import { ListIcon } from "@/components/icons";
@@ -31,6 +31,11 @@ function matches(e: LedgerEntry, f: Filter): boolean {
   }
 }
 
+function matchesVisible(e: LedgerEntry, f: Filter): boolean {
+  if (e.type === "rewardEarned") return false; // internal accrual rows
+  return matches(e, f);
+}
+
 function glyphFor(e: LedgerEntry, cat?: Category) {
   if (cat) return { icon: cat.icon, color: cat.color };
   switch (e.type) {
@@ -40,6 +45,8 @@ function glyphFor(e: LedgerEntry, cat?: Category) {
       return { icon: "💵", color: "#e4e4e7" };
     case "setAside":
       return { icon: "🐷", color: "#e4e4e7" };
+    case "rewardEarned":
+      return { icon: "🎁", color: "#e4e4e7" };
     case "rewardSpend":
       return { icon: "🎁", color: "#e4e4e7" };
   }
@@ -49,6 +56,7 @@ const TYPE_WORD: Record<LedgerType, string> = {
   expense: "Expense",
   income: "Income",
   setAside: "Set aside",
+  rewardEarned: "Reward earned",
   rewardSpend: "Reward",
 };
 
@@ -69,7 +77,7 @@ export default function TransactionsPage() {
   const filtered = useMemo(
     () =>
       (entries ?? [])
-        .filter((e) => matches(e, filter))
+        .filter((e) => matchesVisible(e, filter))
         .sort(
           (a, b) =>
             a.date === b.date
@@ -222,7 +230,7 @@ export default function TransactionsPage() {
                         aria-label="Delete entry"
                         onClick={() => {
                           if (window.confirm("Delete this entry?")) {
-                            void deleteEntry(e.id as number);
+                            void deleteEntryCascade(e.id as number);
                           }
                         }}
                         className="ml-1 rounded-lg p-1.5 text-stone-300 active:bg-rose-50 active:text-rose-500"

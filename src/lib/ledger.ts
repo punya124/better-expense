@@ -78,6 +78,8 @@ export function totalsOf(entries: LedgerEntry[]): PeriodTotals {
       case "rewardSpend":
         rewardSpentCents += e.amountCents;
         break;
+      case "rewardEarned":
+        break; // internal accrual; not part of real cash flow
     }
   }
   return { spentCents, savedCents, incomeCents, rewardSpentCents };
@@ -87,11 +89,17 @@ export function amountSign(e: LedgerEntry): 1 | -1 {
   return e.type === "expense" || e.type === "rewardSpend" ? -1 : 1;
 }
 
+/** rewardEarned rows are internal bookkeeping — hidden from the Activity list. */
+export function isVisible(e: LedgerEntry): boolean {
+  return e.type !== "rewardEarned";
+}
+
 /** Optional human tag shown in list rows next to the amount. */
 export function typeColor(e: LedgerEntry): string {
   switch (e.type) {
     case "expense":
       return "text-rose-600";
+    case "rewardEarned":
     case "rewardSpend":
       return "text-amber-600";
     case "income":

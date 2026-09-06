@@ -7,7 +7,8 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
-    "smoke:db": "tsx scripts/smoke-db.mts"
+    "smoke:db": "tsx scripts/smoke-db.mts",
+    "smoke:game": "tsx scripts/smoke-gamification.mts"
   },
   "dependencies": {
     "dexie": "^4.4.5",

@@ -2,11 +2,12 @@
 
 import Link from "next/link";
 import { useLiveQuery } from "dexie-react-hooks";
-import { db, type Category, type LedgerEntry } from "@/lib/db";
-import { entriesInMonth, totalsOf } from "@/lib/ledger";
+import { db, getSettings, type Category, type LedgerEntry } from "@/lib/db";
+import { totalsOf } from "@/lib/ledger";
+import { levelInfo, PET_STAGES, petStageForXp, gatherMetrics } from "@/lib/gamification";
 import { dayLabel, fmtMoney, monthLabel, monthStartISO, todayISO } from "@/lib/format";
 import { Card, cx } from "@/components/ui";
-import { AwardIcon, GearIcon, ListIcon } from "@/components/icons";
+import { AwardIcon, GearIcon } from "@/components/icons";
 
 function glyphFor(e: LedgerEntry, cat?: Category) {
   if (cat) return { icon: cat.icon, color: cat.color };
@@ -14,40 +15,90 @@ function glyphFor(e: LedgerEntry, cat?: Category) {
     expense: "💸",
     income: "💵",
     setAside: "🐷",
+    rewardEarned: "🎁",
     rewardSpend: "🎁",
   };
   return { icon: map[e.type], color: "#e4e4e7" };
 }
 
 export default function DashboardPage() {
-  const data = useLiveQuery(async () => {
+  const stats = useLiveQuery(async () => {
     const today = todayISO();
-    const monthRows = await entriesInMonth(today);
-    const recent = await db.ledger.orderBy("createdAt").reverse().limit(5).toArray();
-    const cats = new Map((await db.categories.toArray()).map((c) => [c.id, c]));
+    const monthStart = monthStartISO(today);
+    const [ledger, categories, streaks, xpLog, goals, settings] = await Promise.all([
+      db.ledger.toArray(),
+      db.categories.toArray(),
+      db.streaks.toArray(),
+      db.xpLog.toArray(),
+      db.goals.toArray(),
+      getSettings(),
+    ]);
+    const xpTotal = xpLog.reduce((s, x) => s + x.amount, 0);
+    const m = gatherMetrics(
+      ledger,
+      categories,
+      streaks.map(({ key, count, lastDate }) => ({ key, count, lastDate })),
+      xpTotal,
+      goals,
+      today,
+    );
+    const monthRows = ledger.filter((e) => e.date >= monthStart);
     const t = totalsOf(monthRows);
     const spentToday = monthRows
       .filter((r) => r.type === "expense" && r.date === today)
       .reduce((sum, r) => sum + r.amountCents, 0);
+    const cats = new Map(categories.map((c) => [c.id, c]));
+    const recent = ledger
+      .filter((e) => e.type !== "rewardEarned")
+      .sort(
+        (a, b) =>
+          a.date === b.date
+            ? (b.createdAt ?? 0) - (a.createdAt ?? 0)
+            : a.date < b.date
+              ? 1
+              : -1,
+      )
+      .slice(0, 5);
+    const reward = ledger.reduce(
+      (acc, e) => {
+        if (e.type === "rewardEarned") acc.earned += e.amountCents;
+        if (e.type === "rewardSpend") acc.spent += e.amountCents;
+        return acc;
+      },
+      { earned: 0, spent: 0 },
+    );
     return {
       today,
-      savedMonth: t.savedCents,
-      spentMonth: t.spentCents,
+      monthStart,
+      monthRows,
       spentToday,
+      spentMonth: t.spentCents,
+      savedMonth: t.savedCents,
       recent,
       cats,
-      hasAny: monthRows.length > 0,
+      m,
+      xpTotal,
+      level: levelInfo(xpTotal),
+      petStage: petStageForXp(xpTotal),
+      petName: settings?.petName ?? "Peanut",
+      rewardBalance: reward.earned - reward.spent,
     };
   }, []);
 
-  const empty = !data;
+  const data = stats;
+  if (!data) return <section className="min-h-40" />;
+
+  const { m, level } = data;
+  const stage = PET_STAGES.find((s) => s.stage === data.petStage) ?? PET_STAGES[0];
+  const levelPct =
+    level.toNext > 0 ? Math.min(100, (level.intoLevel / level.toNext) * 100) : 100;
 
   return (
     <section>
-      <header className="mb-5 flex items-center justify-between">
+      <header className="mb-4 flex items-center justify-between">
         <div>
           <p className="text-xs font-semibold uppercase tracking-wide text-stone-400">
-            {data?.today ? dayLabel(data.today) : ""}
+            {dayLabel(data.today)}
           </p>
           <h1 className="text-xl font-bold leading-tight">Better Expense</h1>
         </div>
@@ -69,10 +120,67 @@ export default function DashboardPage() {
         </div>
       </header>
 
-      {data && data.hasAny && (
+      {/* Pet + progress */}
+      <Card className="mb-3">
+        <div className="flex items-center gap-3">
+          <div className="flex h-16 w-16 items-center justify-center rounded-3xl bg-emerald-100 text-4xl">
+            <span className="animate-bob" aria-hidden>
+              {stage.emoji}
+            </span>
+          </div>
+          <div className="min-w-0 flex-1">
+            <p className="truncate text-base font-extrabold text-stone-900">
+              {data.petName} · {stage.label}
+            </p>
+            <p className="text-xs text-stone-400">
+              {xpTotalToWords(m.totalXp)}
+            </p>
+          </div>
+          <div className="flex flex-col items-end gap-1">
+            <span className="rounded-full bg-orange-100 px-2.5 py-1 text-xs font-bold text-orange-700">
+              🔥 {m.loginStreak}
+            </span>
+            <span className="rounded-full bg-teal-100 px-2.5 py-1 text-xs font-bold text-teal-700">
+              🧘 {m.noSpendStreak} day{m.noSpendStreak === 1 ? "" : "s"}
+            </span>
+          </div>
+        </div>
+
+        <div className="mt-4">
+          <div className="mb-1 flex items-baseline justify-between text-xs">
+            <span className="font-bold text-stone-500">Level {level.level}</span>
+            <span className="text-stone-400">
+              {level.intoLevel}/{level.toNext} XP to level {level.level + 1}
+            </span>
+          </div>
+          <div className="h-2.5 overflow-hidden rounded-full bg-stone-100">
+            <div
+              className="h-full rounded-full bg-gradient-to-r from-emerald-500 to-teal-500 transition-all"
+              style={{ width: `${levelPct}%` }}
+            />
+          </div>
+        </div>
+
+        {data.rewardBalance > 0 && (
+          <Link
+            href="/rewards"
+            className="mt-4 flex items-center justify-between rounded-2xl bg-amber-50 px-3 py-2.5 text-sm active:bg-amber-100"
+          >
+            <span className="font-semibold text-amber-800">
+              🎁 Guilt-free budget
+            </span>
+            <span className="font-extrabold text-amber-700 tabular-nums">
+              {fmtMoney(data.rewardBalance)}
+            </span>
+          </Link>
+        )}
+      </Card>
+
+      {/* Money this month */}
+      {data.monthRows.length > 0 ? (
         <Card className="mb-3 border-0 bg-gradient-to-br from-emerald-600 to-teal-700 p-5 text-white shadow-md">
           <p className="text-xs font-semibold uppercase tracking-wider text-emerald-100">
-            Saved {monthLabel(monthStartISO(data.today))}
+            Saved {monthLabel(data.monthStart)}
           </p>
           <p className="mt-1 text-4xl font-extrabold tabular-nums">
             {fmtMoney(data.savedMonth)}
@@ -92,9 +200,7 @@ export default function DashboardPage() {
             </div>
           </div>
         </Card>
-      )}
-
-      {data && !data.hasAny && (
+      ) : (
         <Card className="mb-3 border-0 bg-gradient-to-br from-emerald-600 to-teal-700 p-5 text-white shadow-md">
           <p className="text-xl font-extrabold">Start a saving streak 🐷</p>
           <p className="mt-1 text-sm text-emerald-100">
@@ -118,18 +224,18 @@ export default function DashboardPage() {
         </Card>
       )}
 
+      {/* Recent */}
       <div className="mb-2 flex items-center justify-between px-1">
         <h2 className="text-sm font-bold text-stone-600">Recent activity</h2>
-        {data && data.recent.length > 0 && (
+        {data.recent.length > 0 && (
           <Link href="/transactions" className="text-xs font-semibold text-emerald-700">
             See all
           </Link>
         )}
       </div>
 
-      {empty || data.recent.length === 0 ? (
+      {data.recent.length === 0 ? (
         <div className="flex flex-col items-center gap-2 rounded-3xl border border-dashed border-stone-300 py-10 text-center">
-          <ListIcon className="h-7 w-7 text-stone-300" />
           <p className="text-sm font-medium text-stone-500">
             Your latest entries will show up here.
           </p>
@@ -139,15 +245,15 @@ export default function DashboardPage() {
           {data.recent.map((e, i) => {
             const cat = e.categoryId ? data.cats.get(e.categoryId) : undefined;
             const glyph = glyphFor(e, cat);
-            const title = e.merchant || cat?.name || (e.type === "setAside" ? "Saved" : e.type);
+            const title =
+              e.merchant || cat?.name || (e.type === "setAside" ? "Saved" : e.type);
             return (
               <Link
                 key={e.id}
                 href="/transactions"
                 className={cx(
                   "flex items-center gap-3 px-3 py-2.5 active:bg-stone-50",
-                  i < data.recent.length - 1 &&
-                    "border-b border-stone-100",
+                  i < data.recent.length - 1 && "border-b border-stone-100",
                 )}
               >
                 <span
@@ -180,4 +286,12 @@ export default function DashboardPage() {
       )}
     </section>
   );
+}
+
+function xpTotalToWords(totalXp: number): string {
+  if (totalXp === 0) return "Check in to wake your egg 🥚";
+  if (totalXp < 260) return "Just getting going — keep saving!";
+  if (totalXp < 700) return "You're building real momentum.";
+  if (totalXp < 1600) return "A serious saver in the making.";
+  return "Legendary saver. Your pig is proud.";
 }

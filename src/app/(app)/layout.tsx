@@ -4,6 +4,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect, type ReactNode } from "react";
 import { initDB } from "@/lib/db";
+import { checkInToday } from "@/lib/gamification";
 import {
   GiftIcon,
   HomeIcon,
@@ -19,7 +20,10 @@ function classNames(...parts: Array<string | false | undefined>) {
 export default function AppLayout({ children }: { children: ReactNode }) {
   const pathname = usePathname();
   useEffect(() => {
-    void initDB();
+    void (async () => {
+      await initDB();
+      await checkInToday();
+    })();
   }, []);
   const isActive = (href: string) =>
     href === "/" ? pathname === "/" : pathname.startsWith(href);

@@ -4,18 +4,27 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useLiveQuery } from "dexie-react-hooks";
 import { useState } from "react";
-import { db, type LedgerType } from "@/lib/db";
+import { db, getSettings, type LedgerType } from "@/lib/db";
 import { addEntry } from "@/lib/ledger";
-import { centsToInput, inputToCents, todayISO } from "@/lib/format";
+import { recordExpense, recordSave, saveXpFor } from "@/lib/gamification";
+import { fmtMoney, inputToCents, todayISO } from "@/lib/format";
 import { Button, Segmented, cx } from "@/components/ui";
 
 type AddType = Extract<LedgerType, "expense" | "setAside" | "income">;
 
-const TYPE_OPTIONS: Array<{ value: AddType; label: string; emoji: string }> = [
-  { value: "expense", label: "Spent", emoji: "💸" },
-  { value: "setAside", label: "Saved", emoji: "🐷" },
-  { value: "income", label: "Earned", emoji: "💵" },
+const TYPE_OPTIONS = [
+  { value: "expense" as const, label: "Spent", emoji: "💸" },
+  { value: "setAside" as const, label: "Saved", emoji: "🐷" },
+  { value: "income" as const, label: "Earned", emoji: "💵" },
 ];
+
+interface DoneInfo {
+  kind: AddType;
+  money: string;
+  goal?: string;
+  xp?: number;
+  reward?: number;
+}
 
 export default function AddPage() {
   const router = useRouter();
@@ -26,21 +35,22 @@ export default function AddPage() {
   const [goalId, setGoalId] = useState<number | undefined>();
   const [label, setLabel] = useState("");
   const [error, setError] = useState("");
+  const [done, setDone] = useState<DoneInfo | null>(null);
+  const [saving, setSaving] = useState(false);
 
   const categories = useLiveQuery(() => db.categories.orderBy("name").toArray(), []);
   const goals = useLiveQuery(
     () => db.goals.filter((g) => !g.archivedAt).sortBy("createdAt"),
     [],
   );
+  const settings = useLiveQuery(() => getSettings(), []);
   const chosenGoal = goals?.find((g) => g.id === goalId);
 
   const amountCents = inputToCents(amount);
-  const canSave =
-    Number.isFinite(amountCents) && (type !== "setAside" || goalId != null);
+  const canSave = Number.isFinite(amountCents) && (type !== "setAside" || goalId != null);
 
-  function back() {
-    if (window.history.length > 1) router.back();
-    else router.replace("/");
+  function leave() {
+    router.replace("/");
   }
 
   async function save() {
@@ -53,24 +63,92 @@ export default function AddPage() {
       return;
     }
     setError("");
-    await addEntry({
-      type,
-      amountCents: amountCents as number,
-      date,
-      categoryId: type === "expense" ? categoryId : undefined,
-      goalId: type === "setAside" ? goalId : undefined,
-      merchant: type === "income" ? label || "Income" : label || undefined,
-    });
-    back();
+    setSaving(true);
+    try {
+      if (type === "setAside") {
+        const res = await recordSave({
+          goalId: goalId as number,
+          amountCents: amountCents as number,
+          date,
+          note: label.trim() || undefined,
+        });
+        setDone({
+          kind: type,
+          money: fmtMoney(amountCents as number),
+          goal: chosenGoal?.name,
+          xp: res.xpAwarded,
+          reward: res.rewardCents,
+        });
+      } else if (type === "expense") {
+        await recordExpense({
+          amountCents: amountCents as number,
+          date,
+          categoryId,
+          merchant: label.trim() || undefined,
+        });
+        setDone({ kind: type, money: fmtMoney(amountCents as number) });
+      } else {
+        await addEntry({
+          type: "income",
+          amountCents: amountCents as number,
+          date,
+          merchant: label.trim() || "Income",
+        });
+        setDone({ kind: type, money: fmtMoney(amountCents as number) });
+      }
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Couldn't save that.");
+      setSaving(false);
+    }
   }
 
-  const amountDraft = amountCents ? centsToInput(amountCents) : "";
+  if (done) {
+    return (
+      <section className="animate-pop-in flex flex-col items-center pt-16 text-center">
+        <div className="flex h-20 w-20 items-center justify-center rounded-full bg-emerald-100 text-4xl">
+          {done.kind === "setAside" ? "🐷" : done.kind === "expense" ? "💸" : "💵"}
+        </div>
+        <h2 className="mt-5 text-2xl font-extrabold text-stone-900">
+          {done.kind === "setAside"
+            ? `Saved ${done.money}`
+            : done.kind === "expense"
+              ? `Logged ${done.money}`
+              : `Logged ${done.money}`}
+        </h2>
+        {done.goal && (
+          <p className="mt-1 text-sm text-stone-500">toward {done.goal}</p>
+        )}
+        {(done.xp ?? 0) > 0 || (done.reward ?? 0) > 0 ? (
+          <div className="mt-5 flex gap-2">
+            {(done.xp ?? 0) > 0 && (
+              <span className="rounded-full bg-violet-100 px-3 py-1.5 text-sm font-bold text-violet-700">
+                +{done.xp} XP
+              </span>
+            )}
+            {(done.reward ?? 0) > 0 && (
+              <span className="rounded-full bg-amber-100 px-3 py-1.5 text-sm font-bold text-amber-700">
+                +{fmtMoney(done.reward as number)} reward
+              </span>
+            )}
+          </div>
+        ) : null}
+        <Button className="mt-8 w-40" onClick={leave}>
+          Done
+        </Button>
+      </section>
+    );
+  }
+
+  const rewardPreview =
+    type === "setAside" && Number.isFinite(amountCents)
+      ? Math.round((amountCents as number) * (settings?.rewardRate ?? 0.1))
+      : 0;
 
   return (
     <section className="animate-pop-in">
       <div className="mb-4 flex items-center justify-between">
         <h1 className="text-xl font-bold">Add entry</h1>
-        <Button variant="ghost" onClick={back} className="h-9">
+        <Button variant="ghost" onClick={leave} className="h-9">
           Cancel
         </Button>
       </div>
@@ -108,9 +186,12 @@ export default function AddPage() {
             className="w-full bg-transparent px-2 py-1 text-3xl font-bold tabular-nums outline-none placeholder:text-stone-300"
           />
         </div>
-        {amountDraft && type === "setAside" && (
-          <p className="mt-1 text-sm font-medium text-emerald-600">
-            Heading to {chosenGoal?.name ?? "a goal"}.
+        {rewardPreview > 0 && chosenGoal && (
+          <p className="mt-1 text-sm font-semibold text-amber-600">
+            🎁 ~{fmtMoney(rewardPreview)} reward credit + ~{saveXpFor(
+              amountCents as number,
+            )}{" "}
+            XP
           </p>
         )}
       </div>
@@ -206,18 +287,20 @@ export default function AddPage() {
         <input
           value={label}
           onChange={(e) => setLabel(e.target.value)}
-          placeholder={type === "expense" ? "e.g. Lunch with Sam" : type === "income" ? "e.g. Paycheck" : "Optional"}
+          placeholder={
+            type === "expense"
+              ? "e.g. Lunch with Sam"
+              : type === "income"
+                ? "e.g. Paycheck"
+                : "Optional"
+          }
           className="mt-1 w-full rounded-xl border border-stone-200 px-3 py-2 font-medium outline-none focus:border-emerald-400"
         />
       </div>
 
       {error && <p className="mb-3 text-sm font-medium text-rose-600">{error}</p>}
 
-      <Button
-        className="w-full"
-        disabled={!canSave}
-        onClick={() => void save()}
-      >
+      <Button className="w-full" disabled={!canSave || saving} onClick={() => void save()}>
         {type === "expense"
           ? "Log expense"
           : type === "income"
