@@ -10,7 +10,8 @@
     "smoke:db": "tsx scripts/smoke-db.mts",
     "smoke:game": "tsx scripts/smoke-gamification.mts",
     "smoke:backup": "tsx scripts/smoke-backup.mts",
-    "smoke": "npm run smoke:db && npm run smoke:game && npm run smoke:backup"
+    "smoke": "npm run smoke:db && npm run smoke:game && npm run smoke:backup",
+    "gen:icons": "node scripts/gen-icons.mjs"
   },
   "dependencies": {
     "dexie": "^4.4.5",

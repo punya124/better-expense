@@ -7,7 +7,7 @@ import { useState } from "react";
 import { db, getSettings, type LedgerType } from "@/lib/db";
 import { addEntry } from "@/lib/ledger";
 import { recordExpense, recordSave, saveXpFor } from "@/lib/gamification";
-import { fmtMoney, inputToCents, todayISO } from "@/lib/format";
+import { fmtMoney, inputToCents, toISODate, todayISO } from "@/lib/format";
 import { Button, Segmented, cx } from "@/components/ui";
 
 type AddType = Extract<LedgerType, "expense" | "setAside" | "income">;
@@ -17,6 +17,12 @@ const TYPE_OPTIONS = [
   { value: "setAside" as const, label: "Saved", emoji: "🐷" },
   { value: "income" as const, label: "Earned", emoji: "💵" },
 ];
+
+function yesterdayISO(): string {
+  const d = new Date();
+  d.setDate(d.getDate() - 1);
+  return toISODate(d);
+}
 
 interface DoneInfo {
   kind: AddType;
@@ -30,7 +36,9 @@ export default function AddPage() {
   const router = useRouter();
   const [type, setType] = useState<AddType>("expense");
   const [amount, setAmount] = useState("");
-  const [date, setDate] = useState(todayISO());
+  // Empty = "today"; filled only on user action so server HTML never embeds a
+  // wall-clock date (avoids hydration drift after midnight).
+  const [date, setDate] = useState("");
   const [categoryId, setCategoryId] = useState<string | undefined>();
   const [goalId, setGoalId] = useState<number | undefined>();
   const [label, setLabel] = useState("");
@@ -47,6 +55,7 @@ export default function AddPage() {
   const chosenGoal = goals?.find((g) => g.id === goalId);
 
   const amountCents = inputToCents(amount);
+  const saveDate = date || todayISO();
   const canSave = Number.isFinite(amountCents) && (type !== "setAside" || goalId != null);
 
   function leave() {
@@ -69,7 +78,7 @@ export default function AddPage() {
         const res = await recordSave({
           goalId: goalId as number,
           amountCents: amountCents as number,
-          date,
+          date: saveDate,
           note: label.trim() || undefined,
         });
         setDone({
@@ -82,7 +91,7 @@ export default function AddPage() {
       } else if (type === "expense") {
         await recordExpense({
           amountCents: amountCents as number,
-          date,
+          date: saveDate,
           categoryId,
           merchant: label.trim() || undefined,
         });
@@ -91,7 +100,7 @@ export default function AddPage() {
         await addEntry({
           type: "income",
           amountCents: amountCents as number,
-          date,
+          date: saveDate,
           merchant: label.trim() || "Income",
         });
         setDone({ kind: type, money: fmtMoney(amountCents as number) });
@@ -200,13 +209,38 @@ export default function AddPage() {
         <label className="text-xs font-semibold uppercase tracking-wide text-stone-400">
           Date
         </label>
-        <input
-          type="date"
-          value={date}
-          max={todayISO()}
-          onChange={(e) => setDate(e.target.value)}
-          className="mt-1 w-full rounded-xl border border-stone-200 px-3 py-2 font-medium outline-none focus:border-emerald-400"
-        />
+        <div className="mt-1 flex items-center gap-1.5">
+          <button
+            type="button"
+            onClick={() => setDate("")}
+            className={cx(
+              "rounded-full border px-3 py-1.5 text-xs font-semibold transition-colors",
+              date === ""
+                ? "border-emerald-500 bg-emerald-50 text-emerald-800"
+                : "border-stone-200 text-stone-600 active:bg-stone-50",
+            )}
+          >
+            Today
+          </button>
+          <button
+            type="button"
+            onClick={() => setDate(yesterdayISO())}
+            className={cx(
+              "rounded-full border px-3 py-1.5 text-xs font-semibold transition-colors",
+              date === yesterdayISO()
+                ? "border-emerald-500 bg-emerald-50 text-emerald-800"
+                : "border-stone-200 text-stone-600 active:bg-stone-50",
+            )}
+          >
+            Yesterday
+          </button>
+          <input
+            type="date"
+            value={date}
+            onChange={(e) => setDate(e.target.value)}
+            className="min-w-0 flex-1 rounded-xl border border-stone-200 px-3 py-1.5 text-sm font-medium outline-none focus:border-emerald-400"
+          />
+        </div>
       </div>
 
       {type === "expense" && (
