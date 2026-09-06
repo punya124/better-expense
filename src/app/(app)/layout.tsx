@@ -2,7 +2,8 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import type { ReactNode } from "react";
+import { useEffect, type ReactNode } from "react";
+import { initDB } from "@/lib/db";
 import {
   GiftIcon,
   HomeIcon,
@@ -17,6 +18,9 @@ function classNames(...parts: Array<string | false | undefined>) {
 
 export default function AppLayout({ children }: { children: ReactNode }) {
   const pathname = usePathname();
+  useEffect(() => {
+    void initDB();
+  }, []);
   const isActive = (href: string) =>
     href === "/" ? pathname === "/" : pathname.startsWith(href);
 
