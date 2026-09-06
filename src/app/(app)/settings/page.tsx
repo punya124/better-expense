@@ -1,9 +1,15 @@
 "use client";
 
 import { useLiveQuery } from "dexie-react-hooks";
-import { useEffect, useState } from "react";
+import { useRef, useState } from "react";
 import { db, getSettings, initDB, saveSettings } from "@/lib/db";
 import { syncPlaidItem } from "@/lib/plaid/sync";
+import {
+  buildBackupFile,
+  buildLedgerCsv,
+  downloadText,
+  importBackup,
+} from "@/lib/backup";
 import { Button, Card } from "@/components/ui";
 
 const PLAID_LINK_URL = "https://cdn.plaid.com/link/v2/stable/link-initialize.js";
@@ -41,10 +47,9 @@ export default function SettingsPage() {
     () => db.ledger.where("type").equals("setAside").count(),
     [],
   );
-
-  useEffect(() => {
-    if (settings && rate === "") setRate(String(settings.rewardRate * 100));
-  }, [settings, rate]);
+  // Empty input means "current rate"; editing is an override.
+  const effectiveRate =
+    rate !== "" ? rate : String((settings?.rewardRate ?? 0.1) * 100);
 
   function note(msg: string) {
     setMessage(msg);
@@ -137,7 +142,7 @@ export default function SettingsPage() {
   }
 
   async function saveRate() {
-    const pct = Number(rate);
+    const pct = Number(effectiveRate);
     if (!Number.isFinite(pct) || pct < 0 || pct > 100) {
       setRateSaved("Rate must be between 0 and 100.");
       return;
@@ -234,7 +239,7 @@ export default function SettingsPage() {
         <div className="mt-3 flex items-center gap-2">
           <input
             inputMode="decimal"
-            value={rate}
+            value={effectiveRate}
             onChange={(e) => setRate(e.target.value)}
             className="w-24 rounded-xl border border-stone-200 px-3 py-2 text-sm font-bold outline-none focus:border-emerald-400"
           />
@@ -254,15 +259,15 @@ export default function SettingsPage() {
 
       {/* Data */}
       <Card>
-        <h2 className="font-extrabold text-stone-900">Your data</h2>
+        <h2 className="font-extrabold text-stone-900">Backup & data</h2>
         <p className="mt-0.5 text-sm text-stone-500">
-          This app is local-first. Switch phones by exporting a backup on this
-          device and importing it on the new one.
+          This app is local-first. Switch phones by exporting a backup here and
+          importing it on the new device.
         </p>
         <p className="mt-1 text-xs text-stone-400">
-          {saveCount ?? 0} set-aside{saveCount === 1 ? "" : "s"} recorded on this
-          device.
+          {saveCount ?? 0} set-aside{saveCount === 1 ? "" : "s"} on this device.
         </p>
+        <BackupControls />
       </Card>
     </section>
   );
@@ -271,7 +276,6 @@ export default function SettingsPage() {
 function PetRename({ name }: { name: string }) {
   const [value, setValue] = useState(name);
   const [saved, setSaved] = useState(false);
-  useEffect(() => setValue(name), [name]);
   return (
     <div className="mt-2 flex items-center gap-2">
       <input
@@ -295,6 +299,96 @@ function PetRename({ name }: { name: string }) {
         Rename
       </Button>
       {saved && <span className="text-xs font-bold text-emerald-600">✓</span>}
+    </div>
+  );
+}
+
+function BackupControls() {
+  const [pass, setPass] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [status, setStatus] = useState<{ ok: boolean; msg: string } | null>(null);
+  const fileRef = useRef<HTMLInputElement | null>(null);
+
+  async function doExport() {
+    setBusy(true);
+    try {
+      const content = await buildBackupFile(pass.trim() || undefined);
+      const stamp = new Date().toISOString().slice(0, 10);
+      downloadText(
+        `better-expense-${stamp}.${pass.trim() ? "enc" : "json"}`,
+        content,
+      );
+      setStatus({ ok: true, msg: "Backup downloaded." });
+    } catch (e) {
+      setStatus({ ok: false, msg: e instanceof Error ? e.message : "Export failed." });
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function onPickFile(f: File | undefined) {
+    if (!f) return;
+    setBusy(true);
+    try {
+      const text = await f.text();
+      const summary = await importBackup(text, pass.trim() || undefined);
+      const rows = summary.tables.reduce((s, t) => s + t.rows, 0);
+      setStatus({
+        ok: true,
+        msg: `Restored ${rows} rows across ${summary.tables.length} tables.`,
+      });
+    } catch (e) {
+      setStatus({ ok: false, msg: e instanceof Error ? e.message : "Import failed." });
+    } finally {
+      setBusy(false);
+      if (fileRef.current) fileRef.current.value = "";
+    }
+  }
+
+  async function doCsv() {
+    try {
+      downloadText("better-expense-ledger.csv", await buildLedgerCsv(), "text/csv");
+    } catch (e) {
+      setStatus({ ok: false, msg: e instanceof Error ? e.message : "CSV failed." });
+    }
+  }
+
+  return (
+    <div className="mt-3">
+      <input
+        type="password"
+        value={pass}
+        onChange={(e) => setPass(e.target.value)}
+        placeholder="Optional password (encrypts the backup)"
+        className="w-full rounded-xl border border-stone-200 px-3 py-2 text-sm outline-none focus:border-emerald-400"
+        autoComplete="off"
+      />
+      <div className="mt-2 grid grid-cols-3 gap-2">
+        <Button variant="secondary" className="h-9 text-xs" disabled={busy} onClick={() => void doExport()}>
+          Export
+        </Button>
+        <Button variant="secondary" className="h-9 text-xs" disabled={busy} onClick={() => fileRef.current?.click()}>
+          Import
+        </Button>
+        <Button variant="secondary" className="h-9 text-xs" disabled={busy} onClick={() => void doCsv()}>
+          CSV
+        </Button>
+      </div>
+      <input
+        ref={fileRef}
+        type="file"
+        accept=".json,.enc,application/json"
+        className="hidden"
+        onChange={(e) => void onPickFile(e.target.files?.[0])}
+      />
+      {status && (
+        <p className={status.ok ? "mt-2 text-xs font-semibold text-emerald-600" : "mt-2 text-xs font-semibold text-rose-600"}>
+          {status.msg}
+        </p>
+      )}
+      <p className="mt-2 text-xs text-stone-400">
+        Importing replaces everything currently on this phone.
+      </p>
     </div>
   );
 }
