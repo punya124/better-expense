@@ -159,6 +159,7 @@ export async function initDB(): Promise<void> {
         ["insurance", "Insurance", "🛡️", "#14b8a6", false],
         ["family-kids", "Family & Kids", "🧸", "#fb923c", false],
         ["personal-care", "Personal care", "🧴", "#a3a3a3", false],
+        ["other-bills", "Bills & other", "🧾", "#94a3b8", false],
         // Wants (discretionary — these count against no-spend days)
         ["dining-out", "Dining out", "🍔", "#f97316", true],
         ["coffee", "Coffee & snacks", "☕", "#a16207", true],

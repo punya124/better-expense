@@ -17,7 +17,7 @@ assert.equal(settings.petName, "Peanut");
 
 // Seed via second open-path (idempotence): running initDB again changes nothing.
 await initDB();
-assert.equal(await db.categories.count(), 16, "seed idempotent");
+assert.equal(await db.categories.count(), 17, "seed idempotent");
 
 const today = todayISO();
 const id = await addEntry({
