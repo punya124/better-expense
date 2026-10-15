@@ -105,7 +105,7 @@ Built to stay small, work offline, and keep every byte on your device.
 
 ## Getting started
 
-Runs on Node 18+ and any modern browser. The whole app is client-side — there is no backend to stand up.
+Runs on Node 18+ and any modern browser. The whole app is client-side.
 
 ```bash
 npm install
@@ -122,7 +122,7 @@ PLAID_SECRET=...
 PLAID_ENV=sandbox
 ```
 
-Smoke tests run in Node against an in-memory IndexedDB — no browser needed:
+Smoke tests run in Node against an in-memory IndexedDB, no browser needed:
 
 ```bash
 npm run smoke        # data layer + gamification + backup/restore
