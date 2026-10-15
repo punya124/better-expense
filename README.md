@@ -22,6 +22,10 @@ A web app that makes saving a game you want to play. XP, levels, a virtual pet, 
 
 <br>
 
+<!-- 
+I think it would be beneficial to add a "Table of Contents", as there are a decent amount of sections in your README.
+ -->
+
 ## <img src="assets/target-green.svg" width="24" height="24" style="vertical-align: middle;" /> The Problem
 
 Budgeting apps have always been the source of my cortisol spikes. Red negative numbers, Over-budget reminders, your spending has increased notifications; they use guilt as a tool rather than actually motivating you.
@@ -112,6 +116,10 @@ npm install
 npm run dev          # http://localhost:3000
 ```
 
+<!--
+Rather than having the http://localhost:3000 in the code block, I would write it outside the code block and explain what you are supposed to do with that URL. Currently, it's just there and someone may not know that they are supposed to paste that in their browser to access the application.
+-->
+
 Bank sync is **optional**. To enable it, grab free sandbox keys from the
 [Plaid dashboard](https://dashboard.plaid.com/), copy `.env.example` to
 `.env.local`, and fill in:
@@ -122,7 +130,10 @@ PLAID_SECRET=...
 PLAID_ENV=sandbox
 ```
 
-Smoke tests run in Node against an in-memory IndexedDB, no browser needed:
+Smoke tests run in Node against an in-memory IndexedDB, no browser needed: 
+<!--
+A lot of technical jargon in my opinion. Depending on your intended audience, I wouldn't say that it's needed.
+-->
 
 ```bash
 npm run smoke        # data layer + gamification + backup/restore
@@ -163,3 +174,7 @@ And the [![Featured on Awesome README](https://awesome.re/badge-flat.svg)](https
 <p align="center">
   <sub>Built to make saving feel like play. 🐷</sub>
 </p>
+
+<!--
+README still needs "API" and "Maintainer" sections. Overall, well-formatted. However, I do feel that some sections can be cut down a bit because it seems a little busy/too technically focused, such as the "Tech Stack" section. Keep your intended audience in mind regarding your language.
+-->
