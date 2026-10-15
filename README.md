@@ -74,6 +74,7 @@ Better Expense reframes **paying yourself first** as the one action the app rewa
 | **Reward wallet** | A percentage of each set-aside becomes spendable guilt-free cash, balance-guarded, so you can never spend more than you actually set aside. |
 
 <br>
+
 ## <img src="assets/layers-green.svg" width="24" height="24" style="vertical-align: middle;" /> Tech Stack
 
 Built to stay small, work offline, and keep every byte on your device.
@@ -87,6 +88,7 @@ Built to stay small, work offline, and keep every byte on your device.
 | **Tooling**    | <img src="https://img.shields.io/badge/tsx-%2B%20fake--indexeddb-3178c6?style=flat-square" valign="middle" /> <img src="https://img.shields.io/badge/sharp-icons-99cc00?style=flat-square" valign="middle" /> | `fake-indexeddb` + `tsx` smoke tests for the data, game, and backup layers; `sharp` for PWA icon generation.                        |
 
 <br>
+
 ## <img src="assets/images-green.svg" width="24" height="24" style="vertical-align: middle;" /> Visuals
 
 
