@@ -1,0 +1,76 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1000" height="620" viewBox="0 0 1000 620" role="img" aria-label="Better Expense architecture">
+  <defs>
+    <marker id="arrow" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0 0 L10 5 L0 10 z" fill="#059669"/>
+    </marker>
+    <style>
+      .box { fill: #f8fafc; stroke: #cbd5e1; stroke-width: 1.5; }
+      .core { fill: #ecfdf5; stroke: #10b981; stroke-width: 2; }
+      .proxy { fill: #f8fafc; stroke: #94a3b8; stroke-width: 1.5; stroke-dasharray: 6 6; }
+      .t { font-family: -apple-system, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; fill: #0f172a; }
+      .h { font-weight: 700; }
+      .muted { fill: #64748b; }
+      .line { stroke: #059669; stroke-width: 2; fill: none; marker-end: url(#arrow); }
+    </style>
+  </defs>
+
+  <rect width="1000" height="620" rx="22" fill="#ffffff"/>
+
+  <!-- inputs -->
+  <g>
+    <rect class="box" x="70" y="40" width="360" height="74" rx="14"/>
+    <text class="t h" x="94" y="74" font-size="20">Manual entry</text>
+    <text class="t muted" x="94" y="98" font-size="14">expense · income · set-aside</text>
+  </g>
+  <g>
+    <rect class="box" x="570" y="40" width="360" height="74" rx="14"/>
+    <text class="t h" x="594" y="74" font-size="20">Plaid bank sync</text>
+    <text class="t muted" x="594" y="98" font-size="14">read-only, auto-categorized</text>
+  </g>
+  <g>
+    <rect class="proxy" x="570" y="128" width="360" height="52" rx="12"/>
+    <text class="t muted" x="750" y="160" font-size="14" font-style="italic" text-anchor="middle">Stateless proxy — no accounts, no server DB.</text>
+  </g>
+
+  <!-- arrows down to ledger -->
+  <path class="line" d="M250 114 L250 196"/>
+  <path class="line" d="M750 114 L750 128"/>
+  <path class="line" d="M750 180 L750 196"/>
+
+  <!-- ledger (core) -->
+  <g>
+    <rect class="core" x="70" y="200" width="860" height="94" rx="16"/>
+    <text class="t h" x="500" y="240" font-size="22" text-anchor="middle" fill="#065f46">Ledger — Dexie over IndexedDB (on-device)</text>
+    <text class="t muted" x="500" y="270" font-size="14" text-anchor="middle">expense · income · setAside · rewardEarned · rewardSpend — the phone is the source of truth</text>
+  </g>
+
+  <!-- arrows to gamification + wallet -->
+  <path class="line" d="M300 294 L300 348"/>
+  <path class="line" d="M700 294 L700 348"/>
+
+  <!-- gamification -->
+  <g>
+    <rect class="box" x="70" y="352" width="410" height="104" rx="14"/>
+    <text class="t h" x="94" y="388" font-size="20">Gamification engine</text>
+    <text class="t muted" x="94" y="416" font-size="14">XP · Levels · Pet stages · Streaks · Badges</text>
+    <text class="t muted" x="94" y="438" font-size="14">pure functions in lib — re-checked on every write</text>
+  </g>
+  <!-- reward wallet -->
+  <g>
+    <rect class="box" x="520" y="352" width="410" height="104" rx="14"/>
+    <text class="t h" x="544" y="388" font-size="20">Reward wallet</text>
+    <text class="t muted" x="544" y="416" font-size="14">A slice of every set-aside (default 10%)</text>
+    <text class="t muted" x="544" y="438" font-size="14">guilt-free spending, balance-guarded</text>
+  </g>
+
+  <!-- arrows to backup -->
+  <path class="line" d="M320 456 L430 498"/>
+  <path class="line" d="M680 456 L570 498"/>
+
+  <!-- backup -->
+  <g>
+    <rect class="box" x="70" y="502" width="860" height="82" rx="14"/>
+    <text class="t h" x="500" y="536" font-size="20" text-anchor="middle">Backup &amp; restore</text>
+    <text class="t muted" x="500" y="562" font-size="14" text-anchor="middle">Versioned JSON export · optional password encryption (WebCrypto) · CSV — how you move to a new phone</text>
+  </g>
+</svg>
